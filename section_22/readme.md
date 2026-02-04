@@ -451,3 +451,4 @@ If you want next, I can:
 * Compare **RQ vs Celery**
 * Dockerize **FastAPI + Worker + Valkey**
 * Build **async UI polling**
+

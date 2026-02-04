@@ -9,7 +9,7 @@ from langgraph.checkpoint.mongodb import MongoDBSaver
 load_dotenv()
 
 llm = init_chat_model(
-    model= "gpt-4.1-mini",
+    model= "gemini-3-flash-preview",
     model_provider="openai"
 )
 
