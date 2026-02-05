@@ -2,24 +2,31 @@ from dotenv import load_dotenv
 from typing_extensions import TypedDict
 from  typing import Annotated
 from langgraph.graph.message import add_messages
-from langchain.graph import Stategraph, START, END
+from langgraph.graph import StateGraph, START, END
 from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.mongodb import MongoDBSaver
+from openai import OpenAI
+import os 
 
 load_dotenv()
 
-
+""" 
+checkpoint is the snapshot of graph state saved at each super step and represented by each snap shot 
+store state in some db  
+- use mongodb 
+- docker compose 
+"""
 llm = init_chat_model(
-    model= "gpt-4.1-mini",
-    model_provider="openai"
+     "google_genai:gemini-3-flash-preview",
 )
+
 
 class State(TypedDict):
     messages:Annotated[list, add_messages]
 
-def chatbot(state:State):
-    response = llm.invoke(state.get("messages"))
-    return {"messages":[response]}
+def  chatbot(state:State):
+    response = llm.invoke(state.get('messages'))
+    return {"messages":[response] }
 
 
 """
@@ -31,7 +38,7 @@ def chatbot(state:State):
 """
 # add random function for assumption 
 
-graph_builder = Stategraph(State)
+graph_builder = StateGraph(State)
 graph_builder.add_node("chatbot", chatbot)
 
 graph_builder.add_edge(START, "chatbot")
@@ -43,14 +50,14 @@ def compile_graph_with_checkpointer(checkpointer):
       return graph_builder.compile(checkpointer=checkpointer)  
      
 
-DB_URI ="MONGODB://admin:admin@localhost:27017"  
+DB_URI ="mongodb://admin:admin@192.168.34.48:27017"  
 with MongoDBSaver.from_conn_string(DB_URI) as checkpointer:
 # open a  connection build a graph with checkpointer do whatever you want to do close the conn
     graph_with_checkpointer = compile_graph_with_checkpointer(checkpointer=checkpointer)
 
     config ={
         "configurable":    {
-            "thread_id":"langgraph",
+            "thread_id":"john",
 
         },
         }
@@ -58,7 +65,7 @@ with MongoDBSaver.from_conn_string(DB_URI) as checkpointer:
 # instead of invoke , you can stream the graph 
 
     for chunk in  graph_with_checkpointer.stream(
-        State({"messages":["Hey, what's the status of checkpoint?"]}),
+        State({"messages":["what is my name? "]}),
         config,
         stream_mode = "values"
         ):
@@ -70,4 +77,6 @@ with MongoDBSaver.from_conn_string(DB_URI) as checkpointer:
     # close a connection 
     # print("\n\nupdated_state: ",updated_state)
 
+
+# you can store the history of user based on spicific scope 
 

@@ -1,57 +1,49 @@
-from langchain.messages import AnyMessage
-from typing_extensions import TypedDict, Annotated
+
+# # (START) => chatbot -> samplenode -> (END).
+
+# # state = { "messages":["Hey there "]}
+# # node runs: chatbot(state:["Hey there"]) -> ["Hi, This is a message from chat bot Node "]
+# # state =  {"messages":["Hey there ", "Hi, This is a message from chat bot Node "]}
+
+
 from dotenv import load_dotenv
-from langgraph.graph.messages import add_messages
-from langchain.graph import Stategraph, START, END
+from typing_extensions import TypedDict
+from typing import Annotated
+from langgraph.graph.message import add_messages
+from langgraph.graph import StateGraph, START, END
 from langchain.chat_models import init_chat_model
-from langgraph.checkpoint.mongodb import MongoDBSaver
 
 load_dotenv()
 
+
 llm = init_chat_model(
-    model= "gemini-3-flash-preview",
-    model_provider="openai"
+    "google_genai:gemini-3-flash-preview",
+    
 )
 
 class State(TypedDict):
-    messages: Annotated[list[AnyMessage], add_messages]
+    messages: Annotated[list, add_messages]
 
-
-def chatbot(state:State):
-    response = llm.invoke(state.get("messages"))
-    print("Inside chatbot node :", state)
-    # return {"messages":["Hi, This is a message from chat bot Node "]}
-    return response
-
+def  chatbot(state:State):
+    response = llm.invoke(state.get('messages'))
+    return {"messages":[response] }
 
 def samplenode(state:State):
-    print("Inside samplenode node :", state)
-    return {"messages":[" sample msgs "]}
+    print("\n\nInside samplenode node ",state)
+    return {"messages":["Sample Message Appended "]}
 
-graph_builder = Stategraph(State)
+graph_builder = StateGraph(State)
 
-# register a graph 
-graph_builder.add_node("xyz", chatbot)
-
+graph_builder.add_node("chatbot", chatbot)
+graph_builder.add_node("samplenode", samplenode)
 
 graph_builder.add_edge(START, "chatbot")
-graph_builder.add_edge( "chatbot", "samplenode")
-graph_builder.add_edge( "samplenode", END)
-
-
-# (START) => chatbot -> samplenode -> (END).
+graph_builder.add_edge("chatbot", "samplenode")
+graph_builder.add_edge("samplenode", END)
 
 graph = graph_builder.compile()
-
 
 updated_state = graph.invoke(State({"messages":["hi, Whats todays status..."]}))
 
 
 print("\n\nUpdated state:", updated_state)
-
-
-
-# state = { "messages":["Hey there "]}
-# node runs: chatbot(state:["Hey there"]) -> ["Hi, This is a message from chat bot Node "]
-# state =  {"messages":["Hey there ", "Hi, This is a message from chat bot Node "]}
-
