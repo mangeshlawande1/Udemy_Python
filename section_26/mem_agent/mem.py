@@ -3,6 +3,8 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 import json
+from langchain_openai import OpenAIEmbeddings
+
 
 load_dotenv()
 
@@ -12,23 +14,27 @@ client = OpenAI(
 )
 
 
+
 config = {
     "version": "v1.1",
-    "embedder": {
-        "provider": "openai",
+     "llm": {
+        "provider": "gemini",
         "config": {
-            "api_key":os.getenv("GEMINI_API_KEY"),
-            "model": "models/text-embedding-004" 
+            "model": "gemini-3-flash-preview",
+            "temperature": 0.1,
         }
     },
-    # "llm": {
-    #     "provider": "openai",
-    #     "config": {
-    #         "api_key": GEMINI_API_KEY,
-    #         "model": "gemini-3-flash-preview",
-    #         "base_url": "https://generativelanguage.googleapis.com"
-    #     }
-    # },
+    "embedder": {
+        "provider": "gemini",
+        # "provider": "openai",
+
+        "config": {
+             "model": "gemini-embedding-001",
+            #  "model": "text-embedding-3-small",
+             "api_key":os.getenv("GEMINI_API_KEY"),
+        }
+    },
+   
     "vector_store": {
         "provider": "qdrant",
         "config": {
@@ -43,30 +49,52 @@ config = {
 
 mem_client = Memory.from_config(config)
 
+while True:
+    user_query = input("Input--> ")
 
-user_query = input("Input--> ")
+    # retrived the memory add a layer 
+    search_mem = mem_client.search(query=user_query, user_id="mango")
+    # it will find only relevant memory, it gives dictionary  
 
-response = client.chat.completions.create(
-    model='gemini-3-flash-preview',
-    messages=[
-        {"role":"user", "content":user_query }
+    memories = [
+        f" ID: {mem.get("id")}\n Memory: {mem.get("memory")}" for mem in search_mem.get("results")
     ]
-);
+    print("Found Memories: ",memories)
 
-ai_response = response.choices[0].message.content
+    SYSTM_PROMPT =f"""
+    Here is the context about the user 
+    {json.dumps(memories)}
+"""
+    response = client.chat.completions.create(
+        model='gemini-3-flash-preview',
+        messages=[
+            {"role":"system", "content":SYSTM_PROMPT },
+            {"role":"user", "content":user_query }
+        ]
+    )
 
-print("AI:", ai_response)
+    ai_response = response.choices[0].message.content
 
-mem_client.add(
-    user_id="mango",
-    messages=[
-        {"role":"user", "content": user_query },
-        {"role":"assistant", "content" : ai_response }
-    ]
-)
+    print("AI:", ai_response)
 
-print("Memory has been saved...")
 
+
+    mem_client.add(
+        messages= [
+            {"role":"user", "content": user_query },
+            {"role":"assistant", "content" : ai_response }
+        ],
+        user_id="mango",
+    )
+
+    print("Memory has been saved...")
+
+
+"""
+we build a memory aware assistant ,using mem0, qdrantdb and 
+this is how we use memory in your apps.
+
+"""
 
 
 

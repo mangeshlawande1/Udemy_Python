@@ -3,14 +3,54 @@ from openai import OpenAI
 import os
 from dotenv import load_dotenv
 import time
+from mem0 import Memory
+
 
 load_dotenv()
 
-mem_client = MemoryClient(api_key=os.getenv("MEM0_API_KEY"))
+# mem_client = MemoryClient(api_key=os.getenv("MEM0_API_KEY"))
+
+
+config = {
+    "llm": {
+        "provider": "gemini",
+        "config": {
+            "model": "gemini-3-flash-preview",
+            "temperature": 0.1,
+        }
+    },
+    "embedder": {
+        "provider": "gemini",
+        "config": {
+            "model": "gemini-embedding-001",
+            "api_key": os.getenv("GEMINI_API_KEY")
+
+        }
+    },
+    "vector_store": {
+        "provider": "qdrant",  # Or chroma, pinecone, etc.
+        "config": {
+            "host": "192.168.34.48",
+            "port": 6333,
+            "collection_name": "mem0_gemini",
+            "embedding_model_dims": 768 # Required for text-embedding-004
+        },
+    }
+}
+
+# m = Memory.from_config(config)
+
+mem_client = Memory.from_config(config)
+
+
+# client = OpenAI(
+#     api_key=os.getenv("GEMINI_API_KEY"),
+#     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+# )
 
 client = OpenAI(
     api_key=os.getenv("GEMINI_API_KEY"),
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    base_url="https://generativelanguage.googleapis.com" # Changed v1beta to v1
 )
 
 user_id = "mango"
@@ -39,7 +79,8 @@ def extract_memory_text(mem):
 
 def show_all_memories():
     """Display all stored memories"""
-    all_response = mem_client.get_all(filters={"user_id": user_id})
+    all_response = mem_client.get_all( user_id=user_id )
+    #all_response =  mem_client.get_all(filters={"user_id": user_id})
     all_memories = extract_memories_from_response(all_response)
     
     print(f"\n📚 Total memories stored: {len(all_memories)}")
@@ -61,7 +102,8 @@ def chat(user_query):
     # Search for relevant memories
     search_response = mem_client.search(
         query=user_query,
-        filters={"user_id": user_id},
+        # filters={"user_id": user_id},
+         user_id=user_id,
         limit=5
     )
     
@@ -101,7 +143,7 @@ def chat(user_query):
             {"role": "user", "content": user_query},
             {"role": "assistant", "content": ai_response}
         ],
-        user_id=user_id
+            user_id="mango",
     )
     
     print("✓ Memory saved!")
