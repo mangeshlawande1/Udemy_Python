@@ -1,6 +1,5 @@
 from dotenv import load_dotenv
 from openai import OpenAI
-from datetime import datetime
 import json
 import requests
 from pydantic import BaseModel, Field
@@ -10,34 +9,37 @@ import os
 
 load_dotenv()
 
-client = OpenAI()
+client = OpenAI(
+    api_key=os.getenv("GEMINI_API_KEY"),
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+)
 
-class   MyOutputFormat(BaseModel):
-    step : str = Field(..., description="Id of the step: PLAN, OUTPUT, TOOL, etc.,")
+
+class MyOutputFormat(BaseModel):
+    step: str = Field(..., description="Id of the step: PLAN, OUTPUT, TOOL, etc.,")
     content: Optional[str] = Field(None, description="Optional string content ")
-    tool:Optional[str] = Field(None, description="The ID of the tool to call.")
+    function: Optional[str] = Field(None, description="The ID of the tool to call.")
     input: Optional[str] = Field(None, description="The input params for the tool ")
+
 
 def run_command(cmd: str):
     result = os.system(cmd)
     return result
 
+
 def get_weather(city: str):
-    url = f"https://wttr.in/{city}?format=%C+%t"
+    url = f"http://wttr.in/{city}?format=%C+%t"
     response = requests.get(url)
 
     if response.status_code == 200:
         return f"The weather in {city} is {response.text}."
-    
+
     return "Something went wrong"
 
 
-available_tools = {
-    "get_weather": get_weather,
-    "run_command": run_command
-}
+available_tools = {"get_weather": get_weather, "run_command": run_command}
 
-SYSTEM_PROMPT = f"""
+SYSTEM_PROMPT = """
     You are an helpfull AI Assistant who is specialized in resolving user query.
     You work on start, plan, action, observe mode.
 
@@ -73,43 +75,45 @@ SYSTEM_PROMPT = f"""
 
 """
 
-messages = [
-  { "role": "system", "content": SYSTEM_PROMPT }
-]
+messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
 while True:
-    query = input("> ")
-    messages.append({ "role": "user", "content": query })
+    query = input("==> ")
+    messages.append({"role": "user", "content": query})
 
     while True:
         response = client.chat.completions.parse(
-            model="gpt-4o",
+            # model="gemini-3-flash-preview",
+            model="gemini-3-pro-preview",
             response_format=MyOutputFormat,
-            messages=messages
+            messages=messages,
         )
-        messages.append({ "role": "assistant", "content": response.choices[0].message.content })
+        messages.append(
+            {"role": "assistant", "content": response.choices[0].message.content}
+        )
         # parsed_response = json.loads(response.choices[0].message.content)
-        parsed_result = response.choices[0].message.parsed 
-    ## provide type safety 
+        parsed_result = response.choices[0].message.parsed
+        ## provide type safety
 
         if parsed_result.step == "plan":
             print(f"🧠: {parsed_result.content}")
             continue
 
         if parsed_result.step == "action":
-            tool_name = parsed_result.tool  
+            tool_name = parsed_result.function
             tool_input = parsed_result.input
+            print(f"🛠️: Calling Tool:{tool_name}({tool_input})")
 
-            print(f"🛠️: Calling Tool:{tool_name} with input {tool_input}")
+            tool_response = available_tools[tool_name](tool_input)
+            print(f"🛠️: {tool_name}({tool_input}) = {tool_response}")
+            messages.append(
+                {
+                    "role": "user",
+                    "content": json.dumps({"step": "observe", "output": tool_response}),
+                }
+            )
+            continue
 
-            if available_tools.get(tool_name) != False:
-                output = available_tools[tool_name](tool_input)
-                messages.append({ "role": "user", "content": json.dumps({ "step": "observe", "output": output }) })
-                continue
-        
         if parsed_result.step == "output":
             print(f"🤖: {parsed_result.content}")
             break
-
-
-        
